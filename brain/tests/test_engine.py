@@ -20,8 +20,8 @@ class EngineTests(unittest.TestCase):
     def test_choose_rebalance_triggers_when_spread_exceeds_threshold(self) -> None:
         quotes = [
             ProtocolQuote("Kamino", 8.5, "fixture"),
-            ProtocolQuote("Drift", 6.7, "fixture"),
-            ProtocolQuote("Jupiter", 7.1, "fixture"),
+            ProtocolQuote("Drift", 6.4, "fixture"),
+            ProtocolQuote("Jupiter", 7.0, "fixture"),
         ]
         decision = choose_rebalance(quotes, EngineState(), EngineConfig(threshold_apy=1.5, cooldown_seconds=900))
         self.assertTrue(decision.should_rebalance)

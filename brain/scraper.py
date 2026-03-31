@@ -7,7 +7,10 @@ from pathlib import Path
 from dataclasses import dataclass
 from typing import Any
 
-import httpx
+try:
+    import httpx  # type: ignore
+except ImportError:  # pragma: no cover - optional in minimal test environments
+    httpx = None  # type: ignore[assignment]
 
 
 @dataclass(slots=True)
@@ -48,12 +51,15 @@ def _extract_numeric_apy(payload: Any) -> float | None:
 
 
 async def fetch_protocol_quote(
-    client: httpx.AsyncClient,
+    client: Any,
     name: str,
     url: str | None,
 ) -> ProtocolQuote:
     if not url:
         return ProtocolQuote(name=name, apy=_fallback_apy(name), source="fallback")
+
+    if httpx is None:
+        return ProtocolQuote(name=name, apy=_fallback_apy(name), source="fallback-missing-httpx")
 
     try:
         response = await client.get(url, timeout=10.0)
@@ -78,6 +84,9 @@ async def fetch_all_quotes() -> list[ProtocolQuote]:
     fixture_path = os.getenv("GREEDYMAN_FIXTURE_FILE")
     if fixture_path:
         return load_quotes_from_fixture(Path(fixture_path))
+
+    if httpx is None:
+        return [ProtocolQuote(name=name, apy=_fallback_apy(name), source="fallback-missing-httpx") for name in ("Kamino", "Drift", "Jupiter")]
 
     urls = {
         "Kamino": os.getenv("KAMINO_APY_URL"),

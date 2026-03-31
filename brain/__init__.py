@@ -1,0 +1,2 @@
+"""Greedyman brain package."""
+

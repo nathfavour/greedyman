@@ -30,6 +30,18 @@ type VaultConfig = {
   };
 };
 
+type RebalancePlan = {
+  target: string;
+  amount: string;
+  vault: string;
+  rpcUrl: string;
+  commitment: "confirmed" | "finalized";
+  sourceStrategy?: string;
+  targetStrategy?: string;
+  adaptorProgram?: string;
+  dryRun: boolean;
+};
+
 function parseArgs(argv: string[]): CliArgs {
   const args: Record<string, string | boolean> = {
     dryRun: process.env.GREEDYMAN_DRY_RUN !== "0",
@@ -66,6 +78,26 @@ function readKeypair(keypairPath: string): Keypair {
   return Keypair.fromSecretKey(Uint8Array.from(secret));
 }
 
+function buildPlan(args: CliArgs, config: VaultConfig, vaultPubkey: PublicKey): RebalancePlan {
+  const targetConfig = config.strategies[args.target];
+  return {
+    target: args.target,
+    amount: args.amount,
+    vault: vaultPubkey.toBase58(),
+    rpcUrl: args.rpcUrl,
+    commitment: config.targetCommitment,
+    sourceStrategy: Object.entries(config.strategies).find(([name]) => name !== args.target)?.[0],
+    targetStrategy: targetConfig?.strategyPubkey,
+    adaptorProgram: targetConfig?.adaptorProgram,
+    dryRun: args.dryRun,
+  };
+}
+
+function printJson(prefix: string, value: unknown): void {
+  console.log(prefix);
+  console.log(JSON.stringify(value, null, 2));
+}
+
 async function main(): Promise<number> {
   const args = parseArgs(process.argv.slice(2));
   const config = loadVaultConfig(args.configPath);
@@ -76,21 +108,17 @@ async function main(): Promise<number> {
   const vaultPubkey = new PublicKey(vaultPubkeyText);
   const connection = new Connection(args.rpcUrl, { commitment: config.targetCommitment });
   const client = new VoltrClient(connection);
+  const plan = buildPlan(args, config, vaultPubkey);
 
   const state = await client.getPositionAndTotalValuesForVault(vaultPubkey);
-  console.log(
-    JSON.stringify(
-      {
-        target: args.target,
-        amount: args.amount,
-        vault: vaultPubkey.toBase58(),
-        totalValue: state.totalValue?.toString?.() ?? String(state.totalValue),
-        strategies: state.strategies,
-      },
-      null,
-      2,
-    ),
-  );
+  printJson("[body] current vault state", {
+    target: args.target,
+    amount: args.amount,
+    vault: vaultPubkey.toBase58(),
+    totalValue: state.totalValue?.toString?.() ?? String(state.totalValue),
+    strategies: state.strategies,
+  });
+  printJson("[body] execution plan", plan);
 
   if (args.dryRun) {
     console.log(`[dry-run] would rotate capital into ${args.target} for ${args.amount}.`);
@@ -109,7 +137,7 @@ async function main(): Promise<number> {
   }
 
   console.log(
-    `[body] prepared live rotation into ${args.target}. Add the direct withdraw/deposit instructions here once the vault strategy accounts are populated.`,
+    `[body] prepared live rotation into ${args.target} using commitment ${config.targetCommitment}. Add the direct withdraw/deposit instructions here once the vault strategy accounts are populated.`,
   );
   console.log("[body] confirmTransaction should use confirmed or finalized commitment before returning success.");
   return 0;
