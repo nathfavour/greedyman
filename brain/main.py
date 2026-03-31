@@ -66,6 +66,7 @@ def build_status_panel(quotes, state: EngineState, last_message: str, config: En
     summary.add_row("Total Yield", f"{state.total_yield_earned_usdc:.2f} USDC")
     summary.add_row("Threshold", f"{config.threshold_apy:.2f}%")
     summary.add_row("Cooldown", f"{config.cooldown_seconds}s")
+    summary.add_row("Switchback", f"{config.switchback_buffer_apy:.2f}%")
     summary.add_row("Last Event", last_message)
     summary.add_row("Events", str(len(state.event_log)))
     if state.event_log:
@@ -77,7 +78,12 @@ def build_status_panel(quotes, state: EngineState, last_message: str, config: En
     return Panel(group, title=f"Greedyman Brain @ {datetime.now(timezone.utc).isoformat()}")
 
 
-async def invoke_body(target_protocol: str, amount_label: str, body_cwd: str) -> tuple[int, str]:
+async def invoke_body(
+    target_protocol: str,
+    amount_label: str,
+    body_cwd: str,
+    source_protocol: str | None = None,
+) -> tuple[int, str]:
     command = [
         "pnpm",
         "exec",
@@ -88,6 +94,8 @@ async def invoke_body(target_protocol: str, amount_label: str, body_cwd: str) ->
         "--amount",
         amount_label,
     ]
+    if source_protocol:
+        command.extend(["--source", source_protocol])
 
     completed = await asyncio.to_thread(
         subprocess.run,
@@ -115,7 +123,12 @@ async def evaluate_once(
         if dry_run:
             message = f"[dry-run] would rebalance into {decision.target_protocol} ({decision.spread:.2f}%)"
         else:
-            code, output = await invoke_body(decision.target_protocol, decision.amount_label, body_cwd)
+            code, output = await invoke_body(
+                decision.target_protocol,
+                decision.amount_label,
+                body_cwd,
+                decision.source_protocol,
+            )
             if code == 0:
                 record_rebalance(state, decision.target_protocol, estimated_yield_delta=max(decision.spread, 0.0))
                 message = f"Executed rebalance to {decision.target_protocol}: {output or 'success'}"
@@ -129,6 +142,7 @@ async def run_loop(args: argparse.Namespace) -> int:
     runtime = load_runtime_config(
         threshold_apy=None,
         cooldown_seconds=None,
+        switchback_buffer_apy=None,
         poll_interval_seconds=args.interval,
         dry_run=args.dry_run,
         body_cwd=args.body_cwd,
@@ -138,7 +152,11 @@ async def run_loop(args: argparse.Namespace) -> int:
         json_logs=args.json_logs,
     )
     state = load_state(runtime.state_path)
-    config = EngineConfig(threshold_apy=runtime.threshold_apy, cooldown_seconds=runtime.cooldown_seconds)
+    config = EngineConfig(
+        threshold_apy=runtime.threshold_apy,
+        cooldown_seconds=runtime.cooldown_seconds,
+        switchback_buffer_apy=runtime.switchback_buffer_apy,
+    )
 
     last_message = "Waiting for first evaluation"
     cycles = 0

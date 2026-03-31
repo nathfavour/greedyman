@@ -16,6 +16,7 @@ def load_state(path: Path) -> EngineState:
     raw = json.loads(path.read_text(encoding="utf-8"))
     state = EngineState(
         last_target_protocol=raw.get("last_target_protocol"),
+        last_best_protocol=raw.get("last_best_protocol"),
         total_yield_earned_usdc=float(raw.get("total_yield_earned_usdc", 0.0)),
         event_log=list(raw.get("event_log", [])),
     )

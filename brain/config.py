@@ -9,6 +9,7 @@ from pathlib import Path
 class RuntimeConfig:
     threshold_apy: float = 1.5
     cooldown_seconds: int = 900
+    switchback_buffer_apy: float = 0.25
     poll_interval_seconds: int = 60
     dry_run: bool = True
     body_cwd: Path = Path(__file__).resolve().parent.parent / "body"
@@ -22,6 +23,7 @@ def load_runtime_config(
     *,
     threshold_apy: float | None = None,
     cooldown_seconds: int | None = None,
+    switchback_buffer_apy: float | None = None,
     poll_interval_seconds: int | None = None,
     dry_run: bool | None = None,
     body_cwd: str | None = None,
@@ -33,6 +35,9 @@ def load_runtime_config(
     return RuntimeConfig(
         threshold_apy=threshold_apy if threshold_apy is not None else float(os.getenv("GREEDYMAN_THRESHOLD_APY", "1.5")),
         cooldown_seconds=cooldown_seconds if cooldown_seconds is not None else int(os.getenv("GREEDYMAN_COOLDOWN_SECONDS", "900")),
+        switchback_buffer_apy=switchback_buffer_apy
+        if switchback_buffer_apy is not None
+        else float(os.getenv("GREEDYMAN_SWITCHBACK_BUFFER_APY", "0.25")),
         poll_interval_seconds=poll_interval_seconds
         if poll_interval_seconds is not None
         else int(os.getenv("GREEDYMAN_POLL_INTERVAL_SECONDS", "60")),

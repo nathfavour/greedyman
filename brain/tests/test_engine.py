@@ -73,11 +73,12 @@ class EngineTests(unittest.TestCase):
     def test_state_roundtrip(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             state_path = Path(tmp) / "state.json"
-            state = EngineState(last_target_protocol="Drift", total_yield_earned_usdc=3.5)
+            state = EngineState(last_target_protocol="Drift", last_best_protocol="Kamino", total_yield_earned_usdc=3.5)
             state.last_rebalance_at = datetime.now(timezone.utc) - timedelta(minutes=5)
             save_state(state_path, state)
             loaded = load_state(state_path)
             self.assertEqual(loaded.last_target_protocol, "Drift")
+            self.assertEqual(loaded.last_best_protocol, "Kamino")
             self.assertAlmostEqual(loaded.total_yield_earned_usdc, 3.5)
             self.assertIsNotNone(loaded.last_rebalance_at)
 

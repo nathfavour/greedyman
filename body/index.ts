@@ -7,7 +7,9 @@ import { VoltrClient } from "@voltr/vault-sdk";
 type CliArgs = {
   target: string;
   amount: string;
+  source?: string;
   dryRun: boolean;
+  json: boolean;
   rpcUrl: string;
   keypairPath: string;
   configPath: string;
@@ -42,9 +44,19 @@ type RebalancePlan = {
   dryRun: boolean;
 };
 
+type ExecutionIntent = {
+  target: string;
+  source: string | undefined;
+  amountLabel: string;
+  vault: string;
+  commitment: "confirmed" | "finalized";
+  dryRun: boolean;
+};
+
 function parseArgs(argv: string[]): CliArgs {
   const args: Record<string, string | boolean> = {
     dryRun: process.env.GREEDYMAN_DRY_RUN !== "0",
+    json: process.env.GREEDYMAN_BODY_JSON === "1",
     rpcUrl: process.env.HELIUS_RPC_URL ?? "https://api.devnet.solana.com",
     keypairPath: process.env.SOLANA_KEYPAIR_PATH ?? `${process.env.HOME ?? ""}/.config/solana/id.json`,
     configPath: new URL("./vault_config.json", import.meta.url).pathname,
@@ -55,10 +67,12 @@ function parseArgs(argv: string[]): CliArgs {
     const next = argv[index + 1];
     if (token === "--target" && next) args.target = next;
     if (token === "--amount" && next) args.amount = next;
+    if (token === "--source" && next) args.source = next;
     if (token === "--rpc" && next) args.rpcUrl = next;
     if (token === "--keypair" && next) args.keypairPath = next;
     if (token === "--config" && next) args.configPath = next;
     if (token === "--dry-run") args.dryRun = true;
+    if (token === "--json") args.json = true;
   }
 
   if (!args.target || !args.amount) {
@@ -86,16 +100,62 @@ function buildPlan(args: CliArgs, config: VaultConfig, vaultPubkey: PublicKey): 
     vault: vaultPubkey.toBase58(),
     rpcUrl: args.rpcUrl,
     commitment: config.targetCommitment,
-    sourceStrategy: Object.entries(config.strategies).find(([name]) => name !== args.target)?.[0],
+    sourceStrategy: args.source ?? Object.entries(config.strategies).find(([name]) => name !== args.target)?.[0],
     targetStrategy: targetConfig?.strategyPubkey,
     adaptorProgram: targetConfig?.adaptorProgram,
     dryRun: args.dryRun,
   };
 }
 
+function printOutput(args: CliArgs, label: string, payload: unknown): void {
+  if (args.json) {
+    console.log(
+      JSON.stringify(
+        {
+          label,
+          payload,
+        },
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+
+  console.log(label);
+  console.log(JSON.stringify(payload, null, 2));
+}
+
 function printJson(prefix: string, value: unknown): void {
   console.log(prefix);
   console.log(JSON.stringify(value, null, 2));
+}
+
+function buildIntent(plan: RebalancePlan): ExecutionIntent {
+  return {
+    target: plan.target,
+    source: plan.sourceStrategy,
+    amountLabel: plan.amount,
+    vault: plan.vault,
+    commitment: plan.commitment,
+    dryRun: plan.dryRun,
+  };
+}
+
+async function confirmAtTargetCommitment(
+  connection: Connection,
+  signature: string,
+  commitment: "confirmed" | "finalized",
+): Promise<void> {
+  const latest = await connection.getLatestBlockhash(commitment);
+  await connection.confirmTransaction(
+    {
+      signature,
+      blockhash: latest.blockhash,
+      lastValidBlockHeight: latest.lastValidBlockHeight,
+    },
+    commitment,
+  );
 }
 
 async function main(): Promise<number> {
@@ -109,16 +169,18 @@ async function main(): Promise<number> {
   const connection = new Connection(args.rpcUrl, { commitment: config.targetCommitment });
   const client = new VoltrClient(connection);
   const plan = buildPlan(args, config, vaultPubkey);
+  const intent = buildIntent(plan);
 
   const state = await client.getPositionAndTotalValuesForVault(vaultPubkey);
-  printJson("[body] current vault state", {
+  printOutput(args, "[body] current vault state", {
     target: args.target,
     amount: args.amount,
     vault: vaultPubkey.toBase58(),
     totalValue: state.totalValue?.toString?.() ?? String(state.totalValue),
     strategies: state.strategies,
   });
-  printJson("[body] execution plan", plan);
+  printOutput(args, "[body] execution plan", plan);
+  printOutput(args, "[body] execution intent", intent);
 
   if (args.dryRun) {
     console.log(`[dry-run] would rotate capital into ${args.target} for ${args.amount}.`);
@@ -126,9 +188,10 @@ async function main(): Promise<number> {
   }
 
   const keypair = readKeypair(args.keypairPath);
-  void keypair;
+  console.log(`[body] signer ${keypair.publicKey.toBase58()} ready for vault ${vaultPubkey.toBase58()}.`);
 
   const targetConfig = config.strategies[args.target];
+  const sourceConfig = args.source ? config.strategies[args.source] : undefined;
   if (!targetConfig?.strategyPubkey || !targetConfig?.adaptorProgram) {
     console.log(
       `[body] missing strategy configuration for ${args.target}. Fill body/vault_config.json before enabling live execution.`,
@@ -136,10 +199,19 @@ async function main(): Promise<number> {
     return 0;
   }
 
+  if (!intent.source) {
+    console.log("[body] no source strategy available, skipping live rebalance.");
+    return 0;
+  }
+  if (args.source && !sourceConfig?.strategyPubkey) {
+    console.log(`[body] source strategy ${args.source} is not configured in body/vault_config.json.`);
+    return 0;
+  }
+
   console.log(
-    `[body] prepared live rotation into ${args.target} using commitment ${config.targetCommitment}. Add the direct withdraw/deposit instructions here once the vault strategy accounts are populated.`,
+    `[body] prepared live rotation from ${intent.source ?? "unknown"} into ${args.target} using commitment ${config.targetCommitment}. Add the direct withdraw/deposit instructions here once the vault strategy accounts are populated.`,
   );
-  console.log("[body] confirmTransaction should use confirmed or finalized commitment before returning success.");
+  console.log(`[body] confirmation will use ${intent.commitment} commitment before returning success.`);
   return 0;
 }
 

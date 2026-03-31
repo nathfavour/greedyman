@@ -19,8 +19,8 @@ greedyman/
 ## Quick Start
 
 1. Copy `.env.example` to `.env` and fill in RPC and wallet values.
-2. Create a Python virtual environment in `brain/` and install dependencies.
-3. Install Node dependencies in `body/`.
+2. Run `scripts/bootstrap.sh` to create the Python venv and install the brain dependencies.
+3. Install Node dependencies in `body/` with `pnpm install`.
 4. Run `scripts/run_greedyman.sh` to start the daemon loop.
 
 ## MVP Workflow
@@ -29,7 +29,9 @@ greedyman/
 - Use `GREEDYMAN_DRY_RUN=1` until the vault config is populated and the adapter is ready.
 - The daemon persists cooldown and summary state to `GREEDYMAN_STATE_FILE`.
 - Set `GREEDYMAN_JSON_LOGS=1` if you want structured terminal logs for demo capture or debugging.
+- `GREEDYMAN_SWITCHBACK_BUFFER_APY` adds a small buffer so the bot does not thrash between nearly equal yields.
 - Run `python3 -m unittest discover -s brain/tests -t .` from the repo root to verify the core decision logic.
+- Set `GREEDYMAN_BODY_JSON=1` when you want the TypeScript adapter to emit machine-readable JSON instead of plain terminal output.
 
 ## Design Notes
 
