@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Any
 
@@ -73,6 +75,10 @@ async def fetch_protocol_quote(
 
 
 async def fetch_all_quotes() -> list[ProtocolQuote]:
+    fixture_path = os.getenv("GREEDYMAN_FIXTURE_FILE")
+    if fixture_path:
+        return load_quotes_from_fixture(Path(fixture_path))
+
     urls = {
         "Kamino": os.getenv("KAMINO_APY_URL"),
         "Drift": os.getenv("DRIFT_APY_URL"),
@@ -82,4 +88,24 @@ async def fetch_all_quotes() -> list[ProtocolQuote]:
     async with httpx.AsyncClient(headers={"user-agent": "greedyman/0.1"}) as client:
         tasks = [fetch_protocol_quote(client, name, url) for name, url in urls.items()]
         return await asyncio.gather(*tasks)
+
+
+def load_quotes_from_fixture(path: Path) -> list[ProtocolQuote]:
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(raw, dict):
+        raw = raw.get("quotes", raw)
+
+    quotes: list[ProtocolQuote] = []
+    if isinstance(raw, list):
+        for item in raw:
+            if isinstance(item, dict) and "name" in item and "apy" in item:
+                quotes.append(
+                    ProtocolQuote(
+                        name=str(item["name"]),
+                        apy=float(item["apy"]),
+                        source=str(item.get("source", f"fixture:{path.name}")),
+                        raw=item,
+                    )
+                )
+    return quotes
 
