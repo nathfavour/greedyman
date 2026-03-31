@@ -26,7 +26,7 @@ class EngineTests(unittest.TestCase):
         decision = choose_rebalance(quotes, EngineState(), EngineConfig(threshold_apy=1.5, cooldown_seconds=900))
         self.assertTrue(decision.should_rebalance)
         self.assertEqual(decision.target_protocol, "Kamino")
-        self.assertEqual(decision.source_protocol, "Drift")
+        self.assertEqual(decision.source_protocol, "Jupiter")
 
     def test_choose_rebalance_respects_cooldown(self) -> None:
         state = EngineState(last_rebalance_at=datetime.now(timezone.utc))
