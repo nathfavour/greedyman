@@ -1,0 +1,8 @@
+{
+  "quotes": [
+    { "name": "Kamino", "apy": 8.15, "source": "fixture" },
+    { "name": "Drift", "apy": 7.45, "source": "fixture" },
+    { "name": "Jupiter", "apy": 7.9, "source": "fixture" }
+  ]
+}
+

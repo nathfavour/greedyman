@@ -23,6 +23,13 @@ greedyman/
 3. Install Node dependencies in `body/`.
 4. Run `scripts/run_greedyman.sh` to start the daemon loop.
 
+## MVP Workflow
+
+- Start with `GREEDYMAN_FIXTURE_FILE=brain/sample_quotes.json` for deterministic local runs.
+- Use `GREEDYMAN_DRY_RUN=1` until the vault config is populated and the adapter is ready.
+- The daemon persists cooldown and summary state to `GREEDYMAN_STATE_FILE`.
+- Set `GREEDYMAN_JSON_LOGS=1` if you want structured terminal logs for demo capture or debugging.
+
 ## Design Notes
 
 - The default mode should be safe for Devnet and dry-run local testing.
