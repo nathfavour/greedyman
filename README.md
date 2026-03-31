@@ -26,12 +26,15 @@ greedyman/
 ## MVP Workflow
 
 - Start with `GREEDYMAN_FIXTURE_FILE=brain/sample_quotes.json` for deterministic local runs.
+- Add `GREEDYMAN_DEMO_PROFILE_FILE=brain/sample_demo_profile.json` to force visible APY spikes on specific cycles.
 - Use `GREEDYMAN_DRY_RUN=1` until the vault config is populated and the adapter is ready.
 - The daemon persists cooldown and summary state to `GREEDYMAN_STATE_FILE`.
 - Set `GREEDYMAN_JSON_LOGS=1` if you want structured terminal logs for demo capture or debugging.
 - `GREEDYMAN_SWITCHBACK_BUFFER_APY` adds a small buffer so the bot does not thrash between nearly equal yields.
 - Run `python3 -m unittest discover -s brain/tests -t .` from the repo root to verify the core decision logic.
 - Set `GREEDYMAN_BODY_JSON=1` when you want the TypeScript adapter to emit machine-readable JSON instead of plain terminal output.
+- Run `pnpm exec tsx index.ts --validate-only` in `body/` to check strategy config without touching the chain.
+- Run `scripts/report.sh --fixture-file brain/sample_quotes.json` to generate a quick markdown status report from the persisted daemon state.
 
 ## Design Notes
 

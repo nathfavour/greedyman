@@ -16,6 +16,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from config import load_runtime_config
+from demo import apply_demo_profile
 from engine import EngineConfig, EngineState, choose_rebalance, record_rebalance
 from scraper import fetch_all_quotes
 from state_store import load_state, save_state
@@ -46,6 +47,7 @@ def parse_args() -> argparse.Namespace:
         help="Working directory for the TypeScript adapter",
     )
     parser.add_argument("--fixture-file", default=None, help="Load quotes from a JSON fixture instead of HTTP")
+    parser.add_argument("--demo-profile-file", default=None, help="Apply deterministic APY spikes by cycle")
     parser.add_argument("--state-file", default=None, help="Persist daemon state to this JSON file")
     parser.add_argument("--json-logs", action="store_true", default=None, help="Emit structured JSON logs to stdout")
     return parser.parse_args()
@@ -147,6 +149,7 @@ async def run_loop(args: argparse.Namespace) -> int:
         dry_run=args.dry_run,
         body_cwd=args.body_cwd,
         fixture_path=args.fixture_file,
+        demo_profile_path=args.demo_profile_file,
         state_path=args.state_file,
         max_cycles=args.max_cycles,
         json_logs=args.json_logs,
@@ -162,7 +165,27 @@ async def run_loop(args: argparse.Namespace) -> int:
     cycles = 0
     with Live(refresh_per_second=2, console=console) as live:
         while True:
-            message, quotes = await evaluate_once(state, config, runtime.dry_run, str(runtime.body_cwd))
+            quotes = await fetch_all_quotes()
+            quotes = apply_demo_profile(quotes, cycles, str(runtime.demo_profile_path) if runtime.demo_profile_path else None)
+            decision = choose_rebalance(quotes, state, config)
+            message = decision.reason or "No action taken"
+
+            if decision.should_rebalance and decision.target_protocol:
+                if runtime.dry_run:
+                    message = f"[dry-run] would rebalance into {decision.target_protocol} ({decision.spread:.2f}%)"
+                else:
+                    code, output = await invoke_body(
+                        decision.target_protocol,
+                        decision.amount_label,
+                        str(runtime.body_cwd),
+                        decision.source_protocol,
+                    )
+                    if code == 0:
+                        record_rebalance(state, decision.target_protocol, estimated_yield_delta=max(decision.spread, 0.0))
+                        message = f"Executed rebalance to {decision.target_protocol}: {output or 'success'}"
+                    else:
+                        message = f"Adapter failed with exit code {code}: {output or 'no output'}"
+
             last_message = message
             state.event_log.append(message)
             live.update(build_status_panel(quotes, state, last_message, config))

@@ -10,6 +10,7 @@ type CliArgs = {
   source?: string;
   dryRun: boolean;
   json: boolean;
+  validateOnly: boolean;
   rpcUrl: string;
   keypairPath: string;
   configPath: string;
@@ -57,6 +58,7 @@ function parseArgs(argv: string[]): CliArgs {
   const args: Record<string, string | boolean> = {
     dryRun: process.env.GREEDYMAN_DRY_RUN !== "0",
     json: process.env.GREEDYMAN_BODY_JSON === "1",
+    validateOnly: process.env.GREEDYMAN_VALIDATE_ONLY === "1",
     rpcUrl: process.env.HELIUS_RPC_URL ?? "https://api.devnet.solana.com",
     keypairPath: process.env.SOLANA_KEYPAIR_PATH ?? `${process.env.HOME ?? ""}/.config/solana/id.json`,
     configPath: new URL("./vault_config.json", import.meta.url).pathname,
@@ -73,6 +75,7 @@ function parseArgs(argv: string[]): CliArgs {
     if (token === "--config" && next) args.configPath = next;
     if (token === "--dry-run") args.dryRun = true;
     if (token === "--json") args.json = true;
+    if (token === "--validate-only") args.validateOnly = true;
   }
 
   if (!args.target || !args.amount) {
@@ -142,6 +145,34 @@ function buildIntent(plan: RebalancePlan): ExecutionIntent {
   };
 }
 
+function validateConfig(config: VaultConfig, args: CliArgs): string[] {
+  const issues: string[] = [];
+  if (!config.vaultPubkey && !process.env.GREEDYMAN_VAULT_PUBKEY) {
+    issues.push("Missing vault pubkey");
+  }
+  if (!config.strategies[args.target]) {
+    issues.push(`Missing target strategy configuration for ${args.target}`);
+  }
+  if (args.source && !config.strategies[args.source]) {
+    issues.push(`Missing source strategy configuration for ${args.source}`);
+  }
+  if (!args.dryRun && !args.validateOnly) {
+    if (!readKeypairSafe(args.keypairPath)) {
+      issues.push(`Keypair not readable at ${args.keypairPath}`);
+    }
+  }
+  return issues;
+}
+
+function readKeypairSafe(keypairPath: string): boolean {
+  try {
+    readKeypair(keypairPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function confirmAtTargetCommitment(
   connection: Connection,
   signature: string,
@@ -162,9 +193,20 @@ async function main(): Promise<number> {
   const args = parseArgs(process.argv.slice(2));
   const config = loadVaultConfig(args.configPath);
   const vaultPubkeyText = config.vaultPubkey || process.env.GREEDYMAN_VAULT_PUBKEY;
-  if (!vaultPubkeyText) {
+  if (!vaultPubkeyText && !args.validateOnly) {
     throw new Error("Missing vault pubkey. Set body/vault_config.json or GREEDYMAN_VAULT_PUBKEY.");
   }
+  const issues = validateConfig(config, args);
+
+  if (args.validateOnly) {
+    printOutput(args, "[body] validation", {
+      valid: issues.length === 0,
+      issues,
+      strategies: Object.keys(config.strategies),
+    });
+    return issues.length === 0 ? 0 : 1;
+  }
+
   const vaultPubkey = new PublicKey(vaultPubkeyText);
   const connection = new Connection(args.rpcUrl, { commitment: config.targetCommitment });
   const client = new VoltrClient(connection);

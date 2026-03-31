@@ -1,0 +1,21 @@
+{
+  "cycle_overrides": [
+    {
+      "cycle": 2,
+      "quotes": [
+        { "name": "Kamino", "apy": 9.8, "source": "demo" },
+        { "name": "Drift", "apy": 6.9, "source": "demo" },
+        { "name": "Jupiter", "apy": 7.1, "source": "demo" }
+      ]
+    },
+    {
+      "cycle": 4,
+      "quotes": [
+        { "name": "Kamino", "apy": 7.0, "source": "demo" },
+        { "name": "Drift", "apy": 9.6, "source": "demo" },
+        { "name": "Jupiter", "apy": 7.2, "source": "demo" }
+      ]
+    }
+  ]
+}
+

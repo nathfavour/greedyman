@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "tsx index.ts",
     "start": "tsx index.ts",
+    "validate": "tsx index.ts --validate-only",
     "typecheck": "tsc --noEmit",
     "build": "tsc"
   },

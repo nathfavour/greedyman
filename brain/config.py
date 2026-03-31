@@ -14,6 +14,7 @@ class RuntimeConfig:
     dry_run: bool = True
     body_cwd: Path = Path(__file__).resolve().parent.parent / "body"
     fixture_path: Path | None = None
+    demo_profile_path: Path | None = None
     state_path: Path = Path(__file__).resolve().parent.parent / ".greedyman_state.json"
     max_cycles: int | None = None
     json_logs: bool = False
@@ -28,6 +29,7 @@ def load_runtime_config(
     dry_run: bool | None = None,
     body_cwd: str | None = None,
     fixture_path: str | None = None,
+    demo_profile_path: str | None = None,
     state_path: str | None = None,
     max_cycles: int | None = None,
     json_logs: bool | None = None,
@@ -44,6 +46,7 @@ def load_runtime_config(
         dry_run=dry_run if dry_run is not None else os.getenv("GREEDYMAN_DRY_RUN", "1") == "1",
         body_cwd=Path(body_cwd) if body_cwd else Path(__file__).resolve().parent.parent / "body",
         fixture_path=Path(fixture_path) if fixture_path else _env_path("GREEDYMAN_FIXTURE_FILE"),
+        demo_profile_path=Path(demo_profile_path) if demo_profile_path else _env_path("GREEDYMAN_DEMO_PROFILE_FILE"),
         state_path=Path(state_path) if state_path else _env_path("GREEDYMAN_STATE_FILE") or Path(__file__).resolve().parent.parent / ".greedyman_state.json",
         max_cycles=max_cycles if max_cycles is not None else _env_int("GREEDYMAN_MAX_CYCLES"),
         json_logs=json_logs if json_logs is not None else os.getenv("GREEDYMAN_JSON_LOGS", "0") == "1",

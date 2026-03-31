@@ -12,6 +12,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from engine import EngineConfig, EngineState, choose_rebalance, record_rebalance
+from demo import apply_demo_profile, load_demo_overrides
 from scraper import ProtocolQuote, load_quotes_from_fixture
 from state_store import load_state, save_state
 
@@ -81,6 +82,28 @@ class EngineTests(unittest.TestCase):
             self.assertEqual(loaded.last_best_protocol, "Kamino")
             self.assertAlmostEqual(loaded.total_yield_earned_usdc, 3.5)
             self.assertIsNotNone(loaded.last_rebalance_at)
+
+    def test_demo_profile_override_applies_by_cycle(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            profile_path = Path(tmp) / "profile.json"
+            profile_path.write_text(
+                json.dumps(
+                    {
+                        "cycle_overrides": [
+                            {
+                                "cycle": 2,
+                                "quotes": [{"name": "Kamino", "apy": 9.5}, {"name": "Drift", "apy": 6.9}],
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            overrides = load_demo_overrides(profile_path)
+            self.assertEqual(len(overrides), 1)
+            base_quotes = [ProtocolQuote("Kamino", 8.0, "fixture"), ProtocolQuote("Drift", 7.0, "fixture")]
+            applied = apply_demo_profile(base_quotes, 2, str(profile_path))
+            self.assertEqual(applied[0].apy, 9.5)
 
 
 if __name__ == "__main__":
