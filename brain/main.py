@@ -62,6 +62,7 @@ def build_status_panel(quotes, state: EngineState, last_message: str, config: En
 
     summary = Table.grid(padding=(0, 1))
     summary.add_row("Last Target", state.last_target_protocol or "-")
+    summary.add_row("Best Seen", state.last_best_protocol or "-")
     summary.add_row("Total Yield", f"{state.total_yield_earned_usdc:.2f} USDC")
     summary.add_row("Threshold", f"{config.threshold_apy:.2f}%")
     summary.add_row("Cooldown", f"{config.cooldown_seconds}s")
@@ -155,9 +156,11 @@ async def run_loop(args: argparse.Namespace) -> int:
                         {
                             "timestamp": datetime.now(timezone.utc).isoformat(),
                             "message": message,
+                            "action": "rebalance" if "Executed rebalance" in message else "hold",
                             "quotes": [asdict(quote) for quote in quotes],
                             "state": {
                                 "last_target_protocol": state.last_target_protocol,
+                                "last_best_protocol": state.last_best_protocol,
                                 "total_yield_earned_usdc": state.total_yield_earned_usdc,
                             },
                         }

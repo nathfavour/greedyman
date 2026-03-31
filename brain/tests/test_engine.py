@@ -38,6 +38,20 @@ class EngineTests(unittest.TestCase):
         self.assertFalse(decision.should_rebalance)
         self.assertIn("Cooldown", decision.reason)
 
+    def test_choose_rebalance_respects_switchback_buffer(self) -> None:
+        state = EngineState(last_target_protocol="Drift")
+        quotes = [
+            ProtocolQuote("Kamino", 8.2, "fixture"),
+            ProtocolQuote("Drift", 6.7, "fixture"),
+        ]
+        decision = choose_rebalance(
+            quotes,
+            state,
+            EngineConfig(threshold_apy=1.0, cooldown_seconds=0, switchback_buffer_apy=1.5),
+        )
+        self.assertFalse(decision.should_rebalance)
+        self.assertEqual(decision.action, "hysteresis")
+
     def test_record_rebalance_updates_state(self) -> None:
         state = EngineState()
         record_rebalance(state, "Kamino", 1.7)
