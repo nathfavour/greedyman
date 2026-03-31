@@ -1,0 +1,21 @@
+{
+  "name": "greedyman-body",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx index.ts",
+    "start": "tsx index.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@solana/web3.js": "*",
+    "@voltr/vault-sdk": "*"
+  },
+  "devDependencies": {
+    "@types/node": "*",
+    "tsx": "*",
+    "typescript": "*"
+  }
+}
+

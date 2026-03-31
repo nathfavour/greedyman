@@ -1,0 +1,4 @@
+httpx
+rich
+python-dotenv
+

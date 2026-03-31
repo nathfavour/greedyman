@@ -1,0 +1,15 @@
+[Unit]
+Description=Greedyman USDC yield allocator
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/nathfavour/code/nathfavour/greedyman
+EnvironmentFile=/home/nathfavour/code/nathfavour/greedyman/.env
+ExecStart=/home/nathfavour/code/nathfavour/greedyman/scripts/run_greedyman.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+

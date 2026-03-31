@@ -1,0 +1,24 @@
+{
+  "vaultPubkey": "",
+  "vaultAssetMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "targetCommitment": "confirmed",
+  "strategies": {
+    "Kamino": {
+      "strategyPubkey": "",
+      "adaptorProgram": ""
+    },
+    "Drift": {
+      "strategyPubkey": "",
+      "adaptorProgram": ""
+    },
+    "Jupiter": {
+      "strategyPubkey": "",
+      "adaptorProgram": ""
+    }
+  },
+  "rebalance": {
+    "withdrawLabel": "100%",
+    "depositLabel": "100%"
+  }
+}
+

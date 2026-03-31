@@ -1,0 +1,9 @@
+.env
+brain/venv/
+brain/.venv/
+body/node_modules/
+body/dist/
+__pycache__/
+*.pyc
+.DS_Store
+
