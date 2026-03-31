@@ -29,6 +29,7 @@ greedyman/
 - Use `GREEDYMAN_DRY_RUN=1` until the vault config is populated and the adapter is ready.
 - The daemon persists cooldown and summary state to `GREEDYMAN_STATE_FILE`.
 - Set `GREEDYMAN_JSON_LOGS=1` if you want structured terminal logs for demo capture or debugging.
+- Run `python3 -m unittest discover -s brain/tests -t .` from the repo root to verify the core decision logic.
 
 ## Design Notes
 
