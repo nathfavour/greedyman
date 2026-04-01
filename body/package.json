@@ -10,6 +10,7 @@
     "build": "tsc"
   },
   "dependencies": {
+    "bn.js": "*",
     "@solana/web3.js": "*",
     "@voltr/vault-sdk": "*"
   },

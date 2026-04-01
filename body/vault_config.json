@@ -1,6 +1,7 @@
 {
   "vaultPubkey": "",
   "vaultAssetMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "assetDecimals": 6,
   "targetCommitment": "confirmed",
   "strategies": {
     "Kamino": {

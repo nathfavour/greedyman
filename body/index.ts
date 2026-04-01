@@ -1,7 +1,8 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { Connection, Keypair, PublicKey } from "@solana/web3.js";
+import BN from "bn.js";
+import { Connection, Keypair, PublicKey, Transaction, TransactionInstruction, sendAndConfirmTransaction } from "@solana/web3.js";
 import { VoltrClient } from "@voltr/vault-sdk";
 
 type CliArgs = {
@@ -19,12 +20,18 @@ type CliArgs = {
 type VaultConfig = {
   vaultPubkey: string;
   vaultAssetMint: string;
+  assetDecimals?: number;
   targetCommitment: "confirmed" | "finalized";
   strategies: Record<
     string,
     {
       strategyPubkey: string;
       adaptorProgram: string;
+      remainingAccounts?: Array<{
+        pubkey: string;
+        isSigner: boolean;
+        isWritable: boolean;
+      }>;
     }
   >;
   rebalance: {
@@ -52,6 +59,11 @@ type ExecutionIntent = {
   vault: string;
   commitment: "confirmed" | "finalized";
   dryRun: boolean;
+};
+
+type StrategyState = {
+  strategyId: string;
+  amount: number;
 };
 
 function parseArgs(argv: string[]): CliArgs {
@@ -145,6 +157,55 @@ function buildIntent(plan: RebalancePlan): ExecutionIntent {
   };
 }
 
+function parseAtomicAmount(amountLabel: string, sourceAmount: number, assetDecimals: number): BN {
+  const label = amountLabel.trim();
+  const scale = 10 ** assetDecimals;
+
+  if (label.toLowerCase() === "all" || label === "100%") {
+    return new BN(Math.max(0, Math.floor(sourceAmount * scale)));
+  }
+
+  if (label.endsWith("%")) {
+    const percent = Number.parseFloat(label.slice(0, -1));
+    if (Number.isFinite(percent) && percent > 0) {
+      return new BN(Math.max(0, Math.floor(sourceAmount * (percent / 100) * scale)));
+    }
+  }
+
+  const numeric = Number.parseFloat(label);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    throw new Error(`Unable to parse amount label: ${amountLabel}`);
+  }
+
+  return new BN(Math.max(0, Math.floor(numeric * scale)));
+}
+
+function findStrategyState(
+  states: StrategyState[],
+  config: VaultConfig,
+  protocolName: string,
+): StrategyState | undefined {
+  const strategyPubkey = config.strategies[protocolName]?.strategyPubkey;
+  if (!strategyPubkey) {
+    return undefined;
+  }
+  return states.find((state) => state.strategyId === strategyPubkey || state.strategyId.endsWith(strategyPubkey));
+}
+
+function toRemainingAccounts(
+  entries: Array<{
+    pubkey: string;
+    isSigner: boolean;
+    isWritable: boolean;
+  }> = [],
+): Array<{ pubkey: PublicKey; isSigner: boolean; isWritable: boolean }> {
+  return entries.map((entry) => ({
+    pubkey: new PublicKey(entry.pubkey),
+    isSigner: entry.isSigner,
+    isWritable: entry.isWritable,
+  }));
+}
+
 function validateConfig(config: VaultConfig, args: CliArgs): string[] {
   const issues: string[] = [];
   if (!config.vaultPubkey && !process.env.GREEDYMAN_VAULT_PUBKEY) {
@@ -187,6 +248,87 @@ async function confirmAtTargetCommitment(
     },
     commitment,
   );
+}
+
+async function buildRebalanceInstructions(
+  client: VoltrClient,
+  config: VaultConfig,
+  plan: RebalancePlan,
+  intent: ExecutionIntent,
+  signer: Keypair,
+  state: {
+    totalValue: number;
+    strategies: StrategyState[];
+  },
+): Promise<{ withdrawAmount: BN; instructions: TransactionInstruction[] }> {
+  if (!intent.source) {
+    throw new Error("Missing source protocol");
+  }
+
+  const sourceStrategyConfig = config.strategies[intent.source];
+  const targetStrategyConfig = config.strategies[intent.target];
+  if (!sourceStrategyConfig?.strategyPubkey || !targetStrategyConfig?.strategyPubkey) {
+    throw new Error("Missing strategy pubkeys in vault_config.json");
+  }
+
+  const sourceState = findStrategyState(state.strategies, config, intent.source);
+  if (!sourceState) {
+    throw new Error(`Could not find live state for source strategy ${intent.source}`);
+  }
+
+  const assetDecimals = config.assetDecimals ?? 6;
+  const withdrawAmount = parseAtomicAmount(plan.amount, sourceState.amount, assetDecimals);
+  if (withdrawAmount.lte(new BN(0))) {
+    throw new Error("Resolved withdraw amount is zero");
+  }
+
+  const vault = new PublicKey(plan.vault);
+  const vaultAssetMint = new PublicKey(config.vaultAssetMint);
+  const assetTokenProgram = new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+  const sourceStrategy = new PublicKey(sourceStrategyConfig.strategyPubkey);
+  const targetStrategy = new PublicKey(targetStrategyConfig.strategyPubkey);
+  const sourceAdaptorProgram = new PublicKey(sourceStrategyConfig.adaptorProgram);
+  const targetAdaptorProgram = new PublicKey(targetStrategyConfig.adaptorProgram);
+  const manager = signer.publicKey;
+
+  const withdrawIx = await client.createWithdrawStrategyIx(
+    {
+      withdrawAmount,
+      instructionDiscriminator: null,
+      additionalArgs: null,
+    },
+    {
+      manager,
+      vault,
+      vaultAssetMint,
+      strategy: sourceStrategy,
+      assetTokenProgram,
+      adaptorProgram: sourceAdaptorProgram,
+      remainingAccounts: toRemainingAccounts(sourceStrategyConfig.remainingAccounts),
+    },
+  );
+
+  const depositIx = await client.createDepositStrategyIx(
+    {
+      depositAmount: withdrawAmount,
+      instructionDiscriminator: null,
+      additionalArgs: null,
+    },
+    {
+      manager,
+      vault,
+      vaultAssetMint,
+      strategy: targetStrategy,
+      assetTokenProgram,
+      adaptorProgram: targetAdaptorProgram,
+      remainingAccounts: toRemainingAccounts(targetStrategyConfig.remainingAccounts),
+    },
+  );
+
+  return {
+    withdrawAmount,
+    instructions: [withdrawIx, depositIx],
+  };
 }
 
 async function main(): Promise<number> {
@@ -250,10 +392,26 @@ async function main(): Promise<number> {
     return 0;
   }
 
+  const built = await buildRebalanceInstructions(client, config, plan, intent, keypair, state);
+  printOutput(args, "[body] built rebalance", {
+    source: intent.source,
+    target: intent.target,
+    withdrawAmount: built.withdrawAmount.toString(),
+    instructionCount: built.instructions.length,
+  });
+
+  const tx = new Transaction().add(...built.instructions);
+  tx.feePayer = keypair.publicKey;
+  const latest = await connection.getLatestBlockhash(config.targetCommitment);
+  tx.recentBlockhash = latest.blockhash;
+
+  const signature = await sendAndConfirmTransaction(connection, tx, [keypair], {
+    commitment: config.targetCommitment,
+  });
+  await confirmAtTargetCommitment(connection, signature, intent.commitment);
   console.log(
-    `[body] prepared live rotation from ${intent.source ?? "unknown"} into ${args.target} using commitment ${config.targetCommitment}. Add the direct withdraw/deposit instructions here once the vault strategy accounts are populated.`,
+    `[body] executed live rotation from ${intent.source ?? "unknown"} into ${args.target} with signature ${signature}.`,
   );
-  console.log(`[body] confirmation will use ${intent.commitment} commitment before returning success.`);
   return 0;
 }
 

@@ -34,6 +34,7 @@ greedyman/
 - Run `python3 -m unittest discover -s brain/tests -t .` from the repo root to verify the core decision logic.
 - Set `GREEDYMAN_BODY_JSON=1` when you want the TypeScript adapter to emit machine-readable JSON instead of plain terminal output.
 - Run `pnpm exec tsx index.ts --validate-only` in `body/` to check strategy config without touching the chain.
+- Run `pnpm exec tsx index.ts --target Drift --source Kamino --amount 100%` in `body/` to execute a live rebalance once the vault and strategy pubkeys are configured.
 - Run `scripts/report.sh --fixture-file brain/sample_quotes.json` to generate a quick markdown status report from the persisted daemon state.
 
 ## Design Notes
